@@ -18,7 +18,6 @@ limitations under the License.
 // candidate models to those named in the request body.
 //
 // For detailed behavioral intent and configuration, see the package README.
-
 package requestedmodels
 
 import (
