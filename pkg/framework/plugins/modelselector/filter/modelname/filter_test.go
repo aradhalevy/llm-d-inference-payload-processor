@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package requestedmodels
+package modelname
 
 import (
 	"context"
@@ -51,7 +51,7 @@ func requestWithModel(field string, value any) *requesthandling.InferenceRequest
 	return r
 }
 
-func TestRequestedModelsFilterFactory(t *testing.T) {
+func TestModelNameFilterFactory(t *testing.T) {
 	tests := []struct {
 		name       string
 		pluginName string
@@ -63,12 +63,12 @@ func TestRequestedModelsFilterFactory(t *testing.T) {
 			name:       "empty params defaults to model field",
 			pluginName: "my-filter",
 			rawParams:  json.RawMessage(``),
-			wantField:  defaultModelField,
+			wantField:  defaultRequestModelField,
 		},
 		{
 			name:       "custom model field",
 			pluginName: "my-filter",
-			rawParams:  json.RawMessage(`{"modelField":"requestedModel"}`),
+			rawParams:  json.RawMessage(`{"requestModelField":"requestedModel"}`),
 			wantField:  "requestedModel",
 		},
 		{
@@ -80,7 +80,7 @@ func TestRequestedModelsFilterFactory(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p, err := RequestedModelsFilterFactory(tt.pluginName, tt.rawParams, nil)
+			p, err := ModelNameFilterFactory(tt.pluginName, tt.rawParams, nil)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -90,21 +90,21 @@ func TestRequestedModelsFilterFactory(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			f := p.(*RequestedModelsFilter)
-			if f.modelField != tt.wantField {
-				t.Errorf("modelField = %s, want %s", f.modelField, tt.wantField)
+			f := p.(*ModelNameFilter)
+			if f.requestModelField != tt.wantField {
+				t.Errorf("requestModelField = %s, want %s", f.requestModelField, tt.wantField)
 			}
 			if got := f.TypedName().Name; got != tt.pluginName {
 				t.Errorf("Name = %s, want %s", got, tt.pluginName)
 			}
-			if got := f.TypedName().Type; got != RequestedModelsFilterType {
-				t.Errorf("Type = %s, want %s", got, RequestedModelsFilterType)
+			if got := f.TypedName().Type; got != ModelNameFilterType {
+				t.Errorf("Type = %s, want %s", got, ModelNameFilterType)
 			}
 		})
 	}
 }
 
-func TestRequestedModelsFilter_Filter(t *testing.T) {
+func TestModelNameFilter_Filter(t *testing.T) {
 	registered := []string{"qwen3", "llama3", "mistral"}
 
 	tests := []struct {
@@ -138,6 +138,11 @@ func TestRequestedModelsFilter_Filter(t *testing.T) {
 			want:      registered,
 		},
 		{
+			name:      "empty array passes all through",
+			modelBody: []any{},
+			want:      registered,
+		},
+		{
 			name:      "non-string model field yields empty (malformed)",
 			modelBody: 42,
 			want:      []string{},
@@ -150,8 +155,8 @@ func TestRequestedModelsFilter_Filter(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := NewRequestedModelsFilter("")
-			req := requestWithModel(defaultModelField, tt.modelBody)
+			f := NewModelNameFilter("")
+			req := requestWithModel(defaultRequestModelField, tt.modelBody)
 
 			got := names(f.Filter(context.Background(), nil, req, candidateModels(registered...)))
 
@@ -170,8 +175,8 @@ func TestRequestedModelsFilter_Filter(t *testing.T) {
 	}
 }
 
-func TestRequestedModelsFilter_CustomModelField(t *testing.T) {
-	f := NewRequestedModelsFilter("requestedModel")
+func TestModelNameFilter_CustomModelField(t *testing.T) {
+	f := NewModelNameFilter("requestedModel")
 	req := requestWithModel("requestedModel", "llama3")
 
 	got := names(f.Filter(context.Background(), nil, req, candidateModels("qwen3", "llama3")))

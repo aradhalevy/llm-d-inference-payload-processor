@@ -13,12 +13,12 @@ payloadProcessor:
         headerName: X-Gateway-Model-Name
     - type: base-model-to-header
     - type: model-selector
-    # Restricts the candidates to the model(s) named in the request body:
+    # Restricts the candidates to the model name(s) in the request body:
     # a request naming a registered model is routed only to it, an array of
     # names lets the scorer/picker choose among that subset, and a request
     # naming no model leaves all candidates available. Unregistered or
     # malformed model fields are rejected with HTTP 400.
-    - type: requested-models-filter
+    - type: model-name-filter
     - type: inflight-requests-scorer
     - type: max-score-picker
     - type: request-metadata-extractor
@@ -30,7 +30,7 @@ payloadProcessor:
       plugins:
         request:
         - pluginRef: model-selector
-        - pluginRef: requested-models-filter
+        - pluginRef: model-name-filter
         - pluginRef: inflight-requests-scorer
           weight: 1.0
         - pluginRef: max-score-picker
