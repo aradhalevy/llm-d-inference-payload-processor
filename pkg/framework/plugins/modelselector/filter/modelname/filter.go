@@ -24,6 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -133,9 +134,12 @@ func (f *ModelNameFilter) Filter(ctx context.Context, _ *plugin.CycleState, requ
 
 // requestBodyModelName extracts the model name from a request-body
 // model field, which may be a single string or an array of non-empty strings.
+// A string starting with '[' is interpreted as a JSON-encoded array of model
+// names, for clients whose model field is constrained to a string type.
 // An absent field (nil), an empty string, or an empty array yield an empty set,
 // meaning the request does not constrain the candidates. Any other shape —
-// including non-string or empty-string array elements — is malformed and
+// including non-string or empty-string array elements, or a '['-prefixed
+// string that does not parse as a JSON string array — is malformed and
 // reported by the second return value being false.
 func requestBodyModelName(raw any) (sets.Set[string], bool) {
 	names := sets.New[string]()
@@ -143,6 +147,9 @@ func requestBodyModelName(raw any) (sets.Set[string], bool) {
 	switch value := raw.(type) {
 	case nil:
 	case string:
+		if strings.HasPrefix(strings.TrimSpace(value), "[") {
+			return encodedModelNames(value)
+		}
 		if value != "" {
 			names.Insert(value)
 		}
@@ -156,6 +163,26 @@ func requestBodyModelName(raw any) (sets.Set[string], bool) {
 		}
 	default:
 		return nil, false
+	}
+
+	return names, true
+}
+
+// encodedModelNames parses a JSON-encoded array of non-empty model names out
+// of a string value. A parse failure or an empty-string element is malformed,
+// reported by the second return value being false.
+func encodedModelNames(value string) (sets.Set[string], bool) {
+	var parsed []string
+	if err := json.Unmarshal([]byte(value), &parsed); err != nil {
+		return nil, false
+	}
+
+	names := sets.New[string]()
+	for _, name := range parsed {
+		if name == "" {
+			return nil, false
+		}
+		names.Insert(name)
 	}
 
 	return names, true

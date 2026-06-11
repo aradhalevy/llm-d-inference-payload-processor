@@ -120,10 +120,11 @@ func TestModelNameFilterFactory(t *testing.T) {
 
 // TestModelNameFilter_Filter verifies the filtering semantics for every shape
 // the request-body model field can take: a configured name pins the candidates
-// to that model, an array keeps only its configured subset, an absent or empty
-// field passes all candidates through, and an unconfigured name or malformed
-// field (wrong type, bad array element) yields an empty result, which the
-// pipeline turns into a request error.
+// to that model, an array (or a string-encoded JSON array) keeps only its
+// configured subset, an absent or empty field passes all candidates through,
+// and an unconfigured name or malformed field (wrong type, bad array element,
+// unparsable encoded array) yields an empty result, which the pipeline turns
+// into a request error.
 func TestModelNameFilter_Filter(t *testing.T) {
 	registered := []string{"qwen3", "llama3", "mistral"}
 
@@ -184,6 +185,32 @@ func TestModelNameFilter_Filter(t *testing.T) {
 		{
 			name:      "array with non-string element yields empty (malformed)",
 			modelBody: []any{"qwen3", 42},
+			want:      []string{},
+		},
+		// A string holding a JSON-encoded array is interpreted as the array
+		// case, for clients whose model field is constrained to a string.
+		{
+			name:      "string-encoded array keeps only the registered ones",
+			modelBody: `["qwen3", "mistral", "gpt-4"]`,
+			want:      []string{"mistral", "qwen3"},
+		},
+		// A string-encoded empty array is treated like an absent field.
+		{
+			name:      "string-encoded empty array passes all through",
+			modelBody: `[]`,
+			want:      registered,
+		},
+		// A '['-prefixed string that is not a valid JSON string array is
+		// malformed and eliminates all candidates.
+		{
+			name:      "string-encoded array with invalid JSON yields empty (malformed)",
+			modelBody: `["qwen3", 42]`,
+			want:      []string{},
+		},
+		// A string-encoded array holding an empty-string element is malformed.
+		{
+			name:      "string-encoded array with empty element yields empty (malformed)",
+			modelBody: `["qwen3", ""]`,
 			want:      []string{},
 		},
 	}

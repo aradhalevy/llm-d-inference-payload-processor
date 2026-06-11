@@ -11,8 +11,9 @@ It is registered as type `model-name-filter` and runs as a modelselector filter.
 1. Reads the model field from the request body (`model` by default).
 2. When the field holds a configured model name in the data store, it is added as a candidate, and models would include a single model.
 3. When the field holds a JSON style array, the array is interpreted as "choose from the list". The filter adds to models the ones configured in the data store, dropping those that are not in the data store. The scorers and picker select the best of the requested subset, and the model-selector plugin outputs the selected model into the `model` field.
-4. If the field is absent, an empty string, or an empty array, all models in the data store are considered as candidates.
-5. If the filter is not able to add any model, that is, all named models are not in the data store, or the field is malformed (not a string or an array of non-empty strings), the pipeline rejects the request with HTTP 400.
+4. A string starting with `[` is interpreted as a JSON-encoded array of model names (e.g. `"model": "[\"model-A\", \"model-B\"]"`) and handled as the array case. This is a convenience for clients whose model field is constrained to a string type, such as benchmark harnesses; a `[`-prefixed string that does not parse as a JSON string array is malformed.
+5. If the field is absent, an empty string, or an empty array, all models in the data store are considered as candidates.
+6. If the filter is not able to add any model, that is, all named models are not in the data store, or the field is malformed (not a string or an array of non-empty strings), the pipeline rejects the request with HTTP 400.
 
 ## Inputs consumed
 
