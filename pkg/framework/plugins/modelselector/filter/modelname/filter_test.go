@@ -26,6 +26,8 @@ import (
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/requesthandling"
 )
 
+// candidateModels builds the datalayer models handed to the filter, simulating
+// the models configured in the data store.
 func candidateModels(names ...string) []datalayer.Model {
 	models := make([]datalayer.Model, 0, len(names))
 	for _, n := range names {
@@ -34,6 +36,8 @@ func candidateModels(names ...string) []datalayer.Model {
 	return models
 }
 
+// names extracts the sorted model names of a filter result, for order-insensitive
+// comparison against the expected names.
 func names(models []datalayer.Model) []string {
 	out := make([]string, 0, len(models))
 	for _, m := range models {
@@ -43,6 +47,8 @@ func names(models []datalayer.Model) []string {
 	return out
 }
 
+// requestWithModel builds an inference request whose body holds the given value
+// under the given field; a nil value leaves the field absent.
 func requestWithModel(field string, value any) *requesthandling.InferenceRequest {
 	r := requesthandling.NewInferenceRequest()
 	if value != nil {
@@ -51,6 +57,10 @@ func requestWithModel(field string, value any) *requesthandling.InferenceRequest
 	return r
 }
 
+// TestModelNameFilterFactory verifies the factory's config handling: empty
+// parameters fall back to the default "model" field, a configured
+// requestModelField is honored, invalid JSON is rejected with an error, and
+// the created plugin carries the instance name and registered type.
 func TestModelNameFilterFactory(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -59,18 +69,22 @@ func TestModelNameFilterFactory(t *testing.T) {
 		wantErr    bool
 		wantField  string
 	}{
+		// Omitting the parameters entirely must fall back to inspecting the
+		// default "model" body field.
 		{
 			name:       "empty params defaults to model field",
 			pluginName: "my-filter",
 			rawParams:  json.RawMessage(``),
 			wantField:  defaultRequestModelField,
 		},
+		// A configured requestModelField must replace the default field.
 		{
 			name:       "custom model field",
 			pluginName: "my-filter",
 			rawParams:  json.RawMessage(`{"requestModelField":"requestedModel"}`),
 			wantField:  "requestedModel",
 		},
+		// Parameters that are not valid JSON must fail plugin creation.
 		{
 			name:       "invalid JSON",
 			pluginName: "my-filter",
@@ -104,6 +118,12 @@ func TestModelNameFilterFactory(t *testing.T) {
 	}
 }
 
+// TestModelNameFilter_Filter verifies the filtering semantics for every shape
+// the request-body model field can take: a configured name pins the candidates
+// to that model, an array keeps only its configured subset, an absent or empty
+// field passes all candidates through, and an unconfigured name or malformed
+// field (wrong type, bad array element) yields an empty result, which the
+// pipeline turns into a request error.
 func TestModelNameFilter_Filter(t *testing.T) {
 	registered := []string{"qwen3", "llama3", "mistral"}
 
@@ -112,41 +132,55 @@ func TestModelNameFilter_Filter(t *testing.T) {
 		modelBody any // value stored at request.Body["model"]
 		want      []string
 	}{
+		// A model name that is configured in the data store pins the
+		// candidates to that single model.
 		{
 			name:      "single registered model keeps only it",
 			modelBody: "qwen3",
 			want:      []string{"qwen3"},
 		},
+		// A model name that is not configured eliminates all candidates;
+		// the pipeline rejects the request.
 		{
 			name:      "single unregistered model yields empty (pipeline error)",
 			modelBody: "gpt-4",
 			want:      []string{},
 		},
+		// An array is "choose from the list": configured names are kept as
+		// candidates, unconfigured ones are dropped.
 		{
 			name:      "array keeps only the registered ones",
 			modelBody: []any{"qwen3", "mistral", "gpt-4"},
 			want:      []string{"mistral", "qwen3"},
 		},
+		// An absent model field does not constrain the request; every
+		// configured model remains a candidate.
 		{
 			name:      "missing model field passes all through",
 			modelBody: nil,
 			want:      registered,
 		},
+		// An empty-string model name is treated like an absent field.
 		{
 			name:      "empty string model passes all through",
 			modelBody: "",
 			want:      registered,
 		},
+		// An empty array is treated like an absent field.
 		{
 			name:      "empty array passes all through",
 			modelBody: []any{},
 			want:      registered,
 		},
+		// A model field of a non-string type is malformed and eliminates
+		// all candidates rather than being silently ignored.
 		{
 			name:      "non-string model field yields empty (malformed)",
 			modelBody: 42,
 			want:      []string{},
 		},
+		// An array holding any non-string element is malformed as a whole,
+		// even if other elements are valid configured names.
 		{
 			name:      "array with non-string element yields empty (malformed)",
 			modelBody: []any{"qwen3", 42},
@@ -175,6 +209,8 @@ func TestModelNameFilter_Filter(t *testing.T) {
 	}
 }
 
+// TestModelNameFilter_CustomModelField verifies that the filter reads the model
+// name from the configured requestModelField instead of the default "model".
 func TestModelNameFilter_CustomModelField(t *testing.T) {
 	f := NewModelNameFilter("requestedModel")
 	req := requestWithModel("requestedModel", "llama3")
