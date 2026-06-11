@@ -132,15 +132,14 @@ func (f *ModelNameFilter) Filter(ctx context.Context, _ *plugin.CycleState, requ
 	return filtered
 }
 
-// requestBodyModelName extracts the model name from a request-body
-// model field, which may be a single string or an array of non-empty strings.
-// A string starting with '[' is interpreted as a JSON-encoded array of model
-// names, for clients whose model field is constrained to a string type.
-// An absent field (nil), an empty string, or an empty array yield an empty set,
-// meaning the request does not constrain the candidates. Any other shape —
-// including non-string or empty-string array elements, or a '['-prefixed
-// string that does not parse as a JSON string array — is malformed and
-// reported by the second return value being false.
+// requestBodyModelName extracts the model name from a request-body model
+// field, which must be a string: either a single model name, or — when
+// starting with '[' — a JSON-encoded array of model names ("choose from the
+// list"). An absent field (nil), an empty string, or an encoded empty array
+// yield an empty set, meaning the request does not constrain the candidates.
+// Any other shape — a non-string field, or a '['-prefixed string that does
+// not parse as a JSON array of non-empty strings — is malformed and reported
+// by the second return value being false.
 func requestBodyModelName(raw any) (sets.Set[string], bool) {
 	names := sets.New[string]()
 
@@ -152,14 +151,6 @@ func requestBodyModelName(raw any) (sets.Set[string], bool) {
 		}
 		if value != "" {
 			names.Insert(value)
-		}
-	case []any:
-		for _, elem := range value {
-			name, isString := elem.(string)
-			if !isString || name == "" {
-				return nil, false
-			}
-			names.Insert(name)
 		}
 	default:
 		return nil, false

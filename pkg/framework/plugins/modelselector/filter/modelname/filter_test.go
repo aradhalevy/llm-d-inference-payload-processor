@@ -120,11 +120,11 @@ func TestModelNameFilterFactory(t *testing.T) {
 
 // TestModelNameFilter_Filter verifies the filtering semantics for every shape
 // the request-body model field can take: a configured name pins the candidates
-// to that model, an array (or a string-encoded JSON array) keeps only its
-// configured subset, an absent or empty field passes all candidates through,
-// and an unconfigured name or malformed field (wrong type, bad array element,
-// unparsable encoded array) yields an empty result, which the pipeline turns
-// into a request error.
+// to that model, a string-encoded JSON array keeps only its configured subset,
+// an absent or empty field passes all candidates through, and an unconfigured
+// name or malformed field (non-string type, unparsable or non-string-array
+// encoded value) yields an empty result, which the pipeline turns into a
+// request error.
 func TestModelNameFilter_Filter(t *testing.T) {
 	registered := []string{"qwen3", "llama3", "mistral"}
 
@@ -147,13 +147,6 @@ func TestModelNameFilter_Filter(t *testing.T) {
 			modelBody: "gpt-4",
 			want:      []string{},
 		},
-		// An array is "choose from the list": configured names are kept as
-		// candidates, unconfigured ones are dropped.
-		{
-			name:      "array keeps only the registered ones",
-			modelBody: []any{"qwen3", "mistral", "gpt-4"},
-			want:      []string{"mistral", "qwen3"},
-		},
 		// An absent model field does not constrain the request; every
 		// configured model remains a candidate.
 		{
@@ -167,12 +160,6 @@ func TestModelNameFilter_Filter(t *testing.T) {
 			modelBody: "",
 			want:      registered,
 		},
-		// An empty array is treated like an absent field.
-		{
-			name:      "empty array passes all through",
-			modelBody: []any{},
-			want:      registered,
-		},
 		// A model field of a non-string type is malformed and eliminates
 		// all candidates rather than being silently ignored.
 		{
@@ -180,19 +167,25 @@ func TestModelNameFilter_Filter(t *testing.T) {
 			modelBody: 42,
 			want:      []string{},
 		},
-		// An array holding any non-string element is malformed as a whole,
-		// even if other elements are valid configured names.
+		// A real JSON array is no longer accepted — the model field must be
+		// a string; the list form is expressed as a string-encoded array.
 		{
-			name:      "array with non-string element yields empty (malformed)",
-			modelBody: []any{"qwen3", 42},
+			name:      "JSON array model field yields empty (malformed)",
+			modelBody: []any{"qwen3", "mistral"},
 			want:      []string{},
 		},
-		// A string holding a JSON-encoded array is interpreted as the array
-		// case, for clients whose model field is constrained to a string.
+		// A string holding a JSON-encoded array is "choose from the list":
+		// configured names are kept as candidates, unconfigured ones dropped.
 		{
 			name:      "string-encoded array keeps only the registered ones",
 			modelBody: `["qwen3", "mistral", "gpt-4"]`,
 			want:      []string{"mistral", "qwen3"},
+		},
+		// Leading whitespace before the encoded array is tolerated.
+		{
+			name:      "string-encoded array with leading whitespace is parsed",
+			modelBody: `  ["qwen3"]`,
+			want:      []string{"qwen3"},
 		},
 		// A string-encoded empty array is treated like an absent field.
 		{
@@ -200,10 +193,17 @@ func TestModelNameFilter_Filter(t *testing.T) {
 			modelBody: `[]`,
 			want:      registered,
 		},
-		// A '['-prefixed string that is not a valid JSON string array is
-		// malformed and eliminates all candidates.
+		// A '['-prefixed string that is not parsable JSON is malformed and
+		// eliminates all candidates.
 		{
 			name:      "string-encoded array with invalid JSON yields empty (malformed)",
+			modelBody: `["qwen3"`,
+			want:      []string{},
+		},
+		// Valid JSON that is not an array of strings (here: a number element)
+		// is malformed as a whole.
+		{
+			name:      "string-encoded array with non-string element yields empty (malformed)",
 			modelBody: `["qwen3", 42]`,
 			want:      []string{},
 		},
